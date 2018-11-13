@@ -231,15 +231,131 @@ a) 先编译的分类，优先调用load
 
 #### Block
 
+##### block原理
+
+- OC代码
+
+<img src="./img/block-1.png" width="300px" />
+
+- 底层实现
+
+<img src="./img/block-2.png" width="500px" />
+
+- 底层结构
+
+<img src="./img/block-3.png" width="800px" />
+
+##### block变量捕获
+
+为了保证block内部能够正常访问外部的变量，block有个变量捕获机制
+
+<img src="./img/block-capture.png" width="400px" />
+
+##### block类型
+
+block有3种类型，可以通过调用class方法或者isa指针查看具体类型，最终都是继承自`NSBlock`类型
+
+- \__NSGlobalBlock__ （ _NSConcreteGlobalBlock ）
+- \__NSStackBlock__ （ _NSConcreteStackBlock ）
+- \__NSMallocBlock__ （ _NSConcreteMallocBlock ）
+
+<img src="./img/block-types.png" width="400px" />
+
+<img src="./img/block-types2.png" width="400px" />
+
+每一种类型的block调用copy后的结果如下所示:
+
+<img src="./img/block-copy.png" width="400px" />
+
+##### block的copy
+
+```objc
+在ARC环境下，编译器会根据情况自动将栈上的block复制(copy)到堆上，比如以下情况
+- block作为函数返回值时
+- 将block赋值给__strong指针时
+- block作为Cocoa API中方法名含有usingBlock的方法参数时
+- block作为GCD API的方法参数时
+
+MRC下block属性的建议写法, 将栈上的block复制(copy)到堆上
+@property (copy, nonatomic) void (^block)(void);
+
+ARC下block属性的建议写法
+@property (strong, nonatomic) void (^block)(void);
+@property (copy, nonatomic) void (^block)(void);
+
+```
+
+##### 对象类型的auto变量
+
+```objc
+当block内部访问了"对象类型"的auto变量时
+如果block是在栈上，将不会对auto变量产生强引用
+
+如果block被拷贝到堆上
+会调用block内部的copy函数
+copy函数内部会调用_Block_object_assign函数
+_Block_object_assign函数会根据auto变量的修饰符（__strong、__weak、__unsafe_unretained）做出相应的操作，形成强引用（retain）或者弱引用
+
+如果block从堆上移除
+会调用block内部的dispose函数
+dispose函数内部会调用_Block_object_dispose函数
+_Block_object_dispose函数会自动释放引用的auto变量（release）
+
+```
+
+<img src="./img/block-auto-copy.png" width="400px" />
+
+#### __block修饰符
+
+```
+__block可以用于解决block内部无法修改auto变量值的问题
+__block不能修饰全局变量、静态变量（static）
+```
+
+- 编译器会将__block变量包装成一个对象
+
+<img src="./img/__block.png" width="500px" />
+
+- __block的内存管理
+	- 当block在栈上时，并不会对__block变量产生强引用
+	- 当block被copy到堆时
+		- 会调用block内部的copy函数
+		- copy函数内部会调用\_Block\_object\_assign函数
+		- \_Block\_object\_assign函数会对__block变量形成强引用（retain）
+
+	<img src="./img/__block2.png" width="700px" />
+	
+	- 当block从堆中移除时
+		- 会调用block内部的dispose函数
+dispose函数内部会调用\_Block\_object\_dispose函数
+\_Block\_object\_dispose函数会自动释放引用的__block变量（release）
+		
+		<img src="./img/__block3.png" width="700px" />
+
+- ____block的__forwarding指针
+	
+	<img src="./img/__block__forwarding.png" width="400px" />
+
+- 对象类型的auto变量、__block变量
+
+```
+```
+
+#### block相关问题
+
 - block的原理是怎样的？本质是什么？
 
 ```
 封装了函数调用以及调用环境的OC对象
+
+本质: OC对象, 继承自NSBlock
 ```
 
 - __block的作用是什么？有什么使用注意点？
 
 ```
+__block可以用于解决block内部无法修改auto变量值的问题
+
 ```
 
 - block的属性修饰词为什么是copy？使用block有哪些使用注意？
@@ -253,8 +369,3 @@ block一旦没有进行copy操作，就不会在堆上
 
 ```
 ```
-
-
-
-
-
