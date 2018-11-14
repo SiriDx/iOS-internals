@@ -444,7 +444,7 @@ pre[class*="language-"] {
 <body>
 <h2 id="toc_0">OC语法</h2>
 
-<h4 id="toc_1">面向对象</h4>
+<h3 id="toc_1">面向对象</h3>
 
 <ul>
 <li>一个NSObject对象占用多少内存？</li>
@@ -477,8 +477,6 @@ meta-class对象的isa指向基类的meta-class对象
 - meta-class对象, 存放类方法
 
 meta-class对象和class对象的内存结构是一样的, 都是struct objc_class</code></pre>
-
-<p><img src="./img/class&meta-class.png" width="500px" /></p>
 
 <h4 id="toc_2">KVO</h4>
 
@@ -556,7 +554,7 @@ accessInstanceVariablesDirectly方法的默认返回值是YES</code></pre>
 <pre><code class="language-none">Category编译之后的底层结构是struct category_t，里面存储着分类的对象方法、类方法、属性、协议信息
 在程序运行的时候，runtime会将Category的数据，合并到类信息中（类对象、元类对象中）</code></pre>
 
-<p><img src="./img/category.png" width="400px" /></p>
+<p><img src="./img/category.png" width="500px" /></p>
 
 <ul>
 <li>Category的加载处理过程</li>
@@ -678,7 +676,7 @@ a) 先编译的分类，优先调用load
 1&gt; 先初始化父类
 2&gt; 再初始化子类（可能最终调用的是父类的initialize方法）</code></pre>
 
-<h4 id="toc_7">Block</h4>
+<h3 id="toc_7">Block</h3>
 
 <h5 id="toc_8">block原理</h5>
 
@@ -758,7 +756,7 @@ _Block_object_dispose函数会自动释放引用的auto变量（release）
 
 <p><img src="./img/block-auto-copy.png" width="400px" /></p>
 
-<h4 id="toc_13">__block修饰符</h4>
+<h5 id="toc_13">__block修饰符</h5>
 
 <pre><code class="language-none">__block可以用于解决block内部无法修改auto变量值的问题
 __block不能修饰全局变量、静态变量（static）</code></pre>
@@ -802,9 +800,46 @@ _Block_object_dispose函数会自动释放引用的__block变量（release）</l
 <li><p>对象类型的auto变量、__block变量</p></li>
 </ul>
 
-<pre><code class="language-none"></code></pre>
+<pre><code class="language-c">当block在栈上时，对它们都不会产生强引用
 
-<h4 id="toc_14">block相关问题</h4>
+当block拷贝到堆上时，都会通过copy函数来处理它们
+- __block变量（假设变量名叫做a）
+    _Block_object_assign((void*)&amp;dst-&gt;a, (void*)src-&gt;a, 8/*BLOCK_FIELD_IS_BYREF*/);
+
+- 对象类型的auto变量（假设变量名叫做p）
+    _Block_object_assign((void*)&amp;dst-&gt;p, (void*)src-&gt;p, 3/*BLOCK_FIELD_IS_OBJECT*/);
+
+当block从堆上移除时，都会通过dispose函数来释放它们
+- __block变量（假设变量名叫做a）
+    _Block_object_dispose((void*)src-&gt;a, 8/*BLOCK_FIELD_IS_BYREF*/);
+
+- 对象类型的auto变量（假设变量名叫做p）
+    _Block_object_dispose((void*)src-&gt;p, 3/*BLOCK_FIELD_IS_OBJECT*/);</code></pre>
+
+<ul>
+<li>被__block修饰的对象类型</li>
+</ul>
+
+<pre><code class="language-c">当__block变量在栈上时，不会对指向的对象产生强引用
+
+当__block变量被copy到堆时, 会调用__block变量内部的copy函数
+copy函数内部会调用_Block_object_assign函数
+_Block_object_assign函数会根据所指向对象的修饰符（__strong、__weak、__unsafe_unretained）做出相应的操作，形成强引用（retain）或者弱引用
+（注意：这里仅限于ARC时会retain，MRC时不会retain）
+
+如果__block变量从堆上移除, 会调用__block变量内部的dispose函数
+dispose函数内部会调用_Block_object_dispose函数
+_Block_object_dispose函数会自动释放指向的对象（release）</code></pre>
+
+<h5 id="toc_14">循环引用</h5>
+
+<p><img src="./img/block_retain_cycle.png" width="300px" /></p>
+
+<ul>
+<li>解决循环引用问题 - ARC</li>
+</ul>
+
+<h4 id="toc_15">block相关问题</h4>
 
 <ul>
 <li>block的原理是怎样的？本质是什么？</li>
@@ -818,21 +853,392 @@ _Block_object_dispose函数会自动释放引用的__block变量（release）</l
 <li>__block的作用是什么？有什么使用注意点？</li>
 </ul>
 
-<pre><code class="language-none">__block可以用于解决block内部无法修改auto变量值的问题
-</code></pre>
+<pre><code class="language-none">1. __block可以用于block内部修改auto变量值的问题
+2. MRC下可以使用__block解决循环引用
+
+__block本质是, 将所修饰的变量包装成一个对象
+该对象中有一个成员变量存储着该变量的值</code></pre>
 
 <ul>
 <li>block的属性修饰词为什么是copy？使用block有哪些使用注意？</li>
 </ul>
 
-<pre><code class="language-none">block一旦没有进行copy操作，就不会在堆上
-使用注意：循环引用问题</code></pre>
+<pre><code class="language-none">ARC下修饰词使用strong或者copy都可以
+MRC下面使用copy将block拷贝到堆上
+block一旦没有进行copy操作，就不会在堆上
+
+循环引用问题:
+当block被copy到堆中时, 会对block中使用到__strong修饰的对象类型的auto变量进行强引用
+如果当前对象也强引用着该block, 会造成循环应用
+
+解决循环引用:
+使用__weak或者__unsafe_unretained修饰该对象类型的auto变量
+
+__weak：不会产生强引用，指向的对象销毁时，会自动让指针置为nil
+__unsafe_unretained：不会产生强引用，不安全，指向的对象销毁时，指针存储的地址值不变</code></pre>
 
 <ul>
 <li>block在修改NSMutableArray，需不需要添加__block？</li>
 </ul>
 
+<pre><code class="language-none">不需要</code></pre>
+
+<h3 id="toc_16">Runtime</h3>
+
+<ul>
+<li>Objective-C是一门动态性比较强的编程语言，跟C、C++等语言有着很大的不同</li>
+<li>Objective-C的动态性是由Runtime API来支撑的</li>
+<li>Runtime API提供的接口基本都是C语言的，源码由C\C++\汇编语言编写</li>
+</ul>
+
+<h5 id="toc_17">isa</h5>
+
+<ul>
+<li>在arm64架构之前，isa就是一个普通的指针，存储着Class、Meta-Class对象的内存地址</li>
+<li><p>从arm64架构开始，对isa进行了优化，变成了一个共用体（union）结构，还使用位域来存储更多的信息</p>
+
+<p><img src="./img/isa_t.png" width="300px" /></p>
+
+<pre><code class="language-none">nonpointer
+0，代表普通的指针，存储着Class、Meta-Class对象的内存地址
+1，代表优化过，使用位域存储更多的信息
+
+has_assoc
+是否有设置过关联对象，如果没有，释放时会更快
+
+has_cxx_dtor
+是否有C++的析构函数（.cxx_destruct），如果没有，释放时会更快
+
+shiftcls
+存储着Class、Meta-Class对象的内存地址信息
+
+magic
+用于在调试时分辨对象是否未完成初始化
+
+deallocating
+对象是否正在释放
+
+extra_rc
+里面存储的值是引用计数器减1
+
+has_sidetable_rc
+引用计数器是否过大无法存储在isa中
+如果为1，那么引用计数会存储在一个叫SideTable的类的属性中</code></pre></li>
+</ul>
+
+<h4 id="toc_18">Class的结构</h4>
+
+<p><img src="./img/class&meta-class.png" width="600px" /></p>
+
+<ul>
+<li><p>class_rw_t</p>
+
+<ul>
+<li>class_rw_t里面的methods、properties、protocols是二维数组，是可读可写的，包含了类的初始内容、分类的内容</li>
+</ul>
+
+<p><img src="./img/class_rw_t.png" width="500px" /></p></li>
+<li><p>class_ro_t</p>
+
+<ul>
+<li>class_ro_t里面的baseMethodList、baseProtocols、ivars、baseProperties是一维数组，是只读的，包含了类的初始内容</li>
+</ul>
+
+<p><img src="./img/class_ro_t.png" width="500px" /></p></li>
+<li><p>method_t: 对方法\函数的封装</p>
+
+<p><img src="./img/method_t.png" width="350px" /></p>
+
+<ul>
+<li>IMP代表函数的具体实现</li>
+<li>SEL代表方法\函数名，一般叫做选择器，底层结构跟char *类似
+
+<ul>
+<li>可以通过@selector()和sel_registerName()获得</li>
+<li>可以通过sel_getName()和NSStringFromSelector()转成字符串</li>
+<li>不同类中相同名字的方法，所对应的方法选择器是相同的</li>
+</ul></li>
+<li>types包含了函数返回值、参数编码的字符串</li>
+</ul></li>
+</ul>
+
+<h5 id="toc_19">方法缓存</h5>
+
+<p>Class内部结构中有个方法缓存（<code>cache_t</code>），用<code>散列表（哈希表）</code>来缓存曾经调用过的方法，可以提高方法的查找速度</p>
+
+<p><img src="./img/cache_t.png" width="500px" /></p>
+
+<h5 id="toc_20">objc_msgSend执行流程</h5>
+
+<p>OC中的方法调用，其实都是转换为objc<em>msgSend函数的调用, objc</em>msgSend的执行流程可以分为3大阶段</p>
+
+<ul>
+<li>消息发送</li>
+</ul>
+
+<p><img src="./img/objc_msgSend1.png" width="700px" /></p>
+
+<pre><code class="language-none">如果是从class_rw_t中查找方法
+- 已经排序的，二分查找
+- 没有排序的，遍历查找
+
+receiver通过isa指针找到receiverClass
+receiverClass通过superclass指针找到superClass</code></pre>
+
+<ul>
+<li>动态方法解析</li>
+</ul>
+
+<p><img src="./img/objc_msgSend2.png" width="400px" /></p>
+
+<pre><code class="language-none">开发者可以实现以下方法，来动态添加方法实现
++resolveInstanceMethod:
++resolveClassMethod:
+
+动态解析过后，会重新走“消息发送”的流程
+“从receiverClass的cache中查找方法”这一步开始执行</code></pre>
+
+<p>动态添加方法
+<img src="./img/objc_msgSend2-1.png" width="650px" /></p>
+
+<ul>
+<li>消息转发</li>
+</ul>
+
+<p><img src="./img/objc_msgSend3.png" width="600px" /></p>
+
+<pre><code class="language-none">开发者可以在forwardInvocation:方法中自定义任何逻辑
+以上方法都有对象方法、类方法2个版本（前面可以是加号+，也可以是减号-）</code></pre>
+
+<h4 id="toc_21">Runtime相关问题</h4>
+
+<ul>
+<li>讲一下 OC 的消息机制</li>
+</ul>
+
+<pre><code class="language-none">OC中的方法调用其实都是转成了objc_msgSend函数的调用，给receiver（方法调用者）发送了一条消息（selector方法名）
+objc_msgSend底层有3大阶段:
+消息发送（当前类、父类中查找）、动态方法解析、消息转发</code></pre>
+
+<ul>
+<li>消息转发机制流程</li>
+</ul>
+
+<pre><code class="language-none">消息发送阶段:
+1. 消息接收者是否为nil? 
+2. 不为nil, 从方法缓存中查找.
+3. 缓存中没有, 去方法列表中查找, 如果找到就调用该方法, 并且将该方法缓存中
+4. 当前类方法列表中找不到, 通过superclass指针, 去父类的方法列表中查找, 如果找到就调用该方法, 并且将该方法存在缓存中
+
+动态方法解析
+5. 如果通过superclass都没有找到, 判断是否做过动态解析
+6. 如果没有会调用+resolveInstanceMethod:或+resolveClassMethod:来动态解析方法(在该方法中可以动态添加方法), 并标记为做过动态解析, 从新走一遍消息发送流程
+
+消息转发
+7. 如果已经做过动态解析, 则进入消息转发
+- 调用forwardingTargetForSelector:方法, 通过返回值转发给其他对象, 进行消息发送
+- 如果返回值为nil, 调用methodSignatureForSelector:方法, 返回值为nil, 调用doesNotRecognizeSelector:方法
+- 返回值不为nil, 调用调用forwardInvocation:方法</code></pre>
+
+<ul>
+<li>什么是Runtime？平时项目中有用过么？</li>
+</ul>
+
+<pre><code class="language-none">OC是一门动态性比较强的编程语言，允许很多操作推迟到程序运行时再进行
+OC的动态性就是由Runtime来支撑和实现的，Runtime是一套C语言的API，封装了很多动态性相关的函数
+平时编写的OC代码，底层都是转换成了Runtime API进行调用
+
+具体应用:
+利用关联对象（AssociatedObject）给分类添加属性
+遍历类的所有成员变量（修改textfield的占位文字颜色、字典转模型、自动归档解档）
+交换方法实现（交换系统的方法）
+利用消息转发机制解决方法找不到的异常问题</code></pre>
+
+<h3 id="toc_22">RunLoop</h3>
+
+<ul>
+<li>运行循环, 在程序运行过程中循环做一些事情</li>
+</ul>
+
+<pre><code class="language-none">RunLoop的基本作用:
+- 保持程序的持续运行
+- 处理App中的各种事件（比如触摸事件、定时器事件等）
+- 节省CPU资源，提高程序性能：该做事时做事，该休息时休息</code></pre>
+
+<p><img src="./img/runloop.png" width="500px" /></p>
+
+<ul>
+<li><p>iOS中有2套API来访问和使用RunLoop</p>
+
+<ul>
+<li>Foundation：NSRunLoop (NSRunLoop是基于CFRunLoopRef的一层OC包装
+)</li>
+<li>Core Foundation：CFRunLoopRef</li>
+</ul></li>
+<li><p>RunLoop与线程</p></li>
+</ul>
+
+<pre><code class="language-none">每条线程都有唯一的一个与之对应的RunLoop对象
+RunLoop保存在一个全局的Dictionary里，线程作为key，RunLoop作为value
+线程刚创建时并没有RunLoop对象，RunLoop会在第一次获取它时创建
+RunLoop会在线程结束时销毁
+主线程的RunLoop已经自动获取（创建），子线程默认没有开启RunLoop</code></pre>
+
+<h5 id="toc_23">Mode</h5>
+
+<ul>
+<li>RunLoop相关的类</li>
+</ul>
+
+<p><img src="./img/runloop_mode1.png" width="600px" /></p>
+
+<ul>
+<li>CFRunLoopModeRef</li>
+</ul>
+
+<pre><code class="language-none">CFRunLoopModeRef代表RunLoop的运行模式
+
+一个RunLoop包含若干个Mode，每个Mode又包含若干个Source0/Source1/Timer/Observer
+
+RunLoop启动时只能选择其中一个Mode，作为currentMode
+
+如果需要切换Mode，只能退出当前Loop，再重新选择一个Mode进入
+不同组的Source0/Source1/Timer/Observer能分隔开来，互不影响
+
+如果Mode里没有任何Source0/Source1/Timer/Observer，RunLoop会立马退出</code></pre>
+
+<pre><code class="language-none">常见的2种Mode:
+kCFRunLoopDefaultMode（NSDefaultRunLoopMode）：App的默认Mode，通常主线程是在这个Mode下运行
+UITrackingRunLoopMode：界面跟踪 Mode，用于 ScrollView 追踪触摸滑动，保证界面滑动时不受其他 Mode 影响</code></pre>
+
+<ul>
+<li>CFRunLoopObserverRef</li>
+</ul>
+
+<p><img src="./img/CFRunLoopObserverRef.png" width="400px" /></p>
+
+<ul>
+<li>添加Observer监听RunLoop的所有状态</li>
+</ul>
+
+<p><img src="./img/CFRunLoopObserverRef2.png" width="600px" /></p>
+
+<h4 id="toc_24">RunLoop的运行逻辑</h4>
+
+<pre><code class="language-none">Source0
+触摸事件处理
+performSelector:onThread:
+
+Source1
+基于Port的线程间通信(如: 其他线程发过来的消息)
+系统事件捕捉(捕捉到系统事件后, 包装成source0进行处理)
+
+Timers
+NSTimer
+performSelector:withObject:afterDelay:
+
+Observers
+用于监听RunLoop的状态
+UI刷新（BeforeWaiting）
+Autorelease pool（BeforeWaiting）</code></pre>
+
+<p><img src="./img/runloop_run.png" width="650px" /></p>
+
+<h4 id="toc_25">RunLoop相关问题</h4>
+
+<ul>
+<li>讲讲 RunLoop，项目中有用到吗？</li>
+</ul>
+
 <pre><code class="language-none"></code></pre>
+
+<ul>
+<li>runloop内部实现逻辑？</li>
+</ul>
+
+<pre><code class="language-none">do {
+    
+}
+while 循环</code></pre>
+
+<ul>
+<li>runloop和线程的关系？</li>
+</ul>
+
+<pre><code class="language-none">每条线程都有唯一的一个与之对应的RunLoop对象
+RunLoop保存在一个全局的Dictionary里，线程作为key，RunLoop作为value
+线程刚创建时并没有RunLoop对象，RunLoop会在第一次获取它时创建
+RunLoop会在线程结束时销毁
+主线程的RunLoop已经自动获取（创建），子线程默认没有开启RunLoop</code></pre>
+
+<ul>
+<li>timer 与 runloop 的关系？</li>
+</ul>
+
+<pre><code class="language-none"></code></pre>
+
+<ul>
+<li>程序中添加每3秒响应一次的NSTimer，当拖动tableview时timer可能无法响应要怎么解决？</li>
+</ul>
+
+<pre><code class="language-none"></code></pre>
+
+<ul>
+<li>runloop 是怎么响应用户操作的，具体流程是什么样的？</li>
+</ul>
+
+<pre><code class="language-none"></code></pre>
+
+<ul>
+<li>说说runLoop的几种状态</li>
+</ul>
+
+<pre><code class="language-none"></code></pre>
+
+<ul>
+<li>runloop的mode作用是什么？</li>
+</ul>
+
+<pre><code class="language-none">分隔不同模式下的Source0/Source1/Timer/Observer，互不影响</code></pre>
+
+<h3 id="toc_26">多线程</h3>
+
+<ul>
+<li>多线程方案</li>
+</ul>
+
+<p><img src="./img/theads.png" width="450px" /></p>
+
+<h5 id="toc_27">GCD</h5>
+
+<ul>
+<li>队列组</li>
+</ul>
+
+<pre><code class="language-none">思考：如何用gcd实现以下功能
+异步并发执行任务1、任务2
+等任务1、任务2都执行完毕后，再回到主线程执行任务3</code></pre>
+
+<p><img src="./img/dispatch_group.png" width="550px" /></p>
+
+<h4 id="toc_28">多线程相关问题</h4>
+
+<pre><code class="language-none">你理解的多线程？
+
+iOS的多线程方案有哪几种？你更倾向于哪一种？
+
+你在项目中用过 GCD 吗？
+
+GCD 的队列类型
+
+说一下 OperationQueue 和 GCD 的区别，以及各自的优势
+
+线程安全的处理手段有哪些？
+
+OC你了解的锁有哪些？在你回答基础上进行二次提问；
+追问一：自旋和互斥对比？
+追问二：使用以上锁需要注意哪些？
+追问三：用C/OC/C++，任选其一，实现自旋或互斥？口述即可！</code></pre>
 
 <script type="text/javascript">
 var _self="undefined"!=typeof window?window:"undefined"!=typeof WorkerGlobalScope&&self instanceof WorkerGlobalScope?self:{},Prism=function(){var e=/\blang(?:uage)?-(?!\*)(\w+)\b/i,t=_self.Prism={util:{encode:function(e){return e instanceof n?new n(e.type,t.util.encode(e.content),e.alias):"Array"===t.util.type(e)?e.map(t.util.encode):e.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/\u00a0/g," ")},type:function(e){return Object.prototype.toString.call(e).match(/\[object (\w+)\]/)[1]},clone:function(e){var n=t.util.type(e);switch(n){case"Object":var a={};for(var r in e)e.hasOwnProperty(r)&&(a[r]=t.util.clone(e[r]));return a;case"Array":return e.map&&e.map(function(e){return t.util.clone(e)})}return e}},languages:{extend:function(e,n){var a=t.util.clone(t.languages[e]);for(var r in n)a[r]=n[r];return a},insertBefore:function(e,n,a,r){r=r||t.languages;var l=r[e];if(2==arguments.length){a=arguments[1];for(var i in a)a.hasOwnProperty(i)&&(l[i]=a[i]);return l}var o={};for(var s in l)if(l.hasOwnProperty(s)){if(s==n)for(var i in a)a.hasOwnProperty(i)&&(o[i]=a[i]);o[s]=l[s]}return t.languages.DFS(t.languages,function(t,n){n===r[e]&&t!=e&&(this[t]=o)}),r[e]=o},DFS:function(e,n,a){for(var r in e)e.hasOwnProperty(r)&&(n.call(e,r,e[r],a||r),"Object"===t.util.type(e[r])?t.languages.DFS(e[r],n):"Array"===t.util.type(e[r])&&t.languages.DFS(e[r],n,r))}},plugins:{},highlightAll:function(e,n){for(var a,r=document.querySelectorAll('code[class*="language-"], [class*="language-"] code, code[class*="lang-"], [class*="lang-"] code'),l=0;a=r[l++];)t.highlightElement(a,e===!0,n)},highlightElement:function(n,a,r){for(var l,i,o=n;o&&!e.test(o.className);)o=o.parentNode;o&&(l=(o.className.match(e)||[,""])[1],i=t.languages[l]),n.className=n.className.replace(e,"").replace(/\s+/g," ")+" language-"+l,o=n.parentNode,/pre/i.test(o.nodeName)&&(o.className=o.className.replace(e,"").replace(/\s+/g," ")+" language-"+l);var s=n.textContent,u={element:n,language:l,grammar:i,code:s};if(!s||!i)return t.hooks.run("complete",u),void 0;if(t.hooks.run("before-highlight",u),a&&_self.Worker){var g=new Worker(t.filename);g.onmessage=function(e){u.highlightedCode=e.data,t.hooks.run("before-insert",u),u.element.innerHTML=u.highlightedCode,r&&r.call(u.element),t.hooks.run("after-highlight",u),t.hooks.run("complete",u)},g.postMessage(JSON.stringify({language:u.language,code:u.code,immediateClose:!0}))}else u.highlightedCode=t.highlight(u.code,u.grammar,u.language),t.hooks.run("before-insert",u),u.element.innerHTML=u.highlightedCode,r&&r.call(n),t.hooks.run("after-highlight",u),t.hooks.run("complete",u)},highlight:function(e,a,r){var l=t.tokenize(e,a);return n.stringify(t.util.encode(l),r)},tokenize:function(e,n){var a=t.Token,r=[e],l=n.rest;if(l){for(var i in l)n[i]=l[i];delete n.rest}e:for(var i in n)if(n.hasOwnProperty(i)&&n[i]){var o=n[i];o="Array"===t.util.type(o)?o:[o];for(var s=0;s<o.length;++s){var u=o[s],g=u.inside,c=!!u.lookbehind,f=0,h=u.alias;u=u.pattern||u;for(var p=0;p<r.length;p++){var d=r[p];if(r.length>e.length)break e;if(!(d instanceof a)){u.lastIndex=0;var m=u.exec(d);if(m){c&&(f=m[1].length);var y=m.index-1+f,m=m[0].slice(f),v=m.length,k=y+v,b=d.slice(0,y+1),w=d.slice(k+1),P=[p,1];b&&P.push(b);var A=new a(i,g?t.tokenize(m,g):m,h);P.push(A),w&&P.push(w),Array.prototype.splice.apply(r,P)}}}}}return r},hooks:{all:{},add:function(e,n){var a=t.hooks.all;a[e]=a[e]||[],a[e].push(n)},run:function(e,n){var a=t.hooks.all[e];if(a&&a.length)for(var r,l=0;r=a[l++];)r(n)}}},n=t.Token=function(e,t,n){this.type=e,this.content=t,this.alias=n};if(n.stringify=function(e,a,r){if("string"==typeof e)return e;if("Array"===t.util.type(e))return e.map(function(t){return n.stringify(t,a,e)}).join("");var l={type:e.type,content:n.stringify(e.content,a,r),tag:"span",classes:["token",e.type],attributes:{},language:a,parent:r};if("comment"==l.type&&(l.attributes.spellcheck="true"),e.alias){var i="Array"===t.util.type(e.alias)?e.alias:[e.alias];Array.prototype.push.apply(l.classes,i)}t.hooks.run("wrap",l);var o="";for(var s in l.attributes)o+=(o?" ":"")+s+'="'+(l.attributes[s]||"")+'"';return"<"+l.tag+' class="'+l.classes.join(" ")+'" '+o+">"+l.content+"</"+l.tag+">"},!_self.document)return _self.addEventListener?(_self.addEventListener("message",function(e){var n=JSON.parse(e.data),a=n.language,r=n.code,l=n.immediateClose;_self.postMessage(t.highlight(r,t.languages[a],a)),l&&_self.close()},!1),_self.Prism):_self.Prism;var a=document.getElementsByTagName("script");return a=a[a.length-1],a&&(t.filename=a.src,document.addEventListener&&!a.hasAttribute("data-manual")&&document.addEventListener("DOMContentLoaded",t.highlightAll)),_self.Prism}();"undefined"!=typeof module&&module.exports&&(module.exports=Prism),"undefined"!=typeof global&&(global.Prism=Prism);
