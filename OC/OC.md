@@ -907,14 +907,15 @@ dispatch_queue(DISPATCH_QUEUE_SERIAL)
 semaphore叫做”信号量”
 信号量的初始值，可以用来控制线程并发访问的最大数量
 信号量的初始值为1，代表同时只允许1条线程访问资源，保证线程同步
+```
 
-执行wait函数时, 会判断信号量是否>0
-	- 如果>0, 就将当前信号量-1
-	- 如果<=0, 当前线程进入休眠等待
-
-(需要线程同步的代码)
-	
-执行signal函数时, 会让信号量+1
+```
+1. 创建信号量对象, 并设置信号量的初始值值1
+2. 将线程中的操作放在wait和signal函数中
+	- wait函数, 会判断信号量是否 >0
+		- 如果 >0, 就将当前信号量 -1
+		- 如果 <=0, 当前线程进入休眠等待
+	- signal函数, 会让当前信号量 +1
 ```
 
 <img src="./img/dispatch_semaphore.png" width="550px" />
@@ -938,25 +939,89 @@ NSConditionLock
 
 ##### atomic 和 nonatomic
 
+```
+atomic用于保证属性setter、getter的原子性操作
+在getter和setter内部加了线程同步的锁(spinlock_t, 自旋锁, 占用CPU资源)
 
+它并不能保证使用属性的过程是线程安全的
+```
+
+#### 读写安全方案
+
+```
+同一时间，只能有1个线程进行写的操作
+同一时间，允许有多个线程进行读的操作
+同一时间，不允许既有写的操作，又有读的操作
+
+上面的场景就是典型的“多读单写”，经常用于文件等数据的读写操作，iOS中的实现方案有
+pthread_rwlock：读写锁
+dispatch_barrier_async：异步栅栏调用
+```
+
+- pthread_rwlock：读写锁
+	- 等待锁的线程会进入休眠 
+
+<img src="./img/pthread_rwlock.png" width="300px" />
+
+- dispatch\_barrier\_async：异步栅栏调用
+
+```
+这个函数传入的并发队列必须是自己通过dispatch_queue_cretate创建的
+如果传入的是一个串行或是一个全局的并发队列，那这个函数便等同于dispatch_async函数的效果
+```
+
+<img src="./img/dispatch_barrier_async.png" width="600px" />
 
 #### 多线程相关问题
 
+- 你理解的多线程？
+
 ```
-你理解的多线程？
 
-iOS的多线程方案有哪几种？你更倾向于哪一种？
-
-你在项目中用过 GCD 吗？
-
-GCD 的队列类型
-
-说一下 OperationQueue 和 GCD 的区别，以及各自的优势
-
-线程安全的处理手段有哪些？
-
-OC你了解的锁有哪些？在你回答基础上进行二次提问；
-追问一：自旋和互斥对比？
-追问二：使用以上锁需要注意哪些？
-追问三：用C/OC/C++，任选其一，实现自旋或互斥？口述即可！
 ```
+
+- iOS的多线程方案有哪几种？你更倾向于哪一种？
+
+```
+pthread, NSThread, GCD,NSOperation
+```
+
+- 你在项目中用过 GCD 吗？
+- GCD的队列类型?
+
+```
+并发队列（Concurrent Dispatch Queue）
+	- 可以让多个任务并发（同时）执行
+
+串行队列（Serial Dispatch Queue）
+让任务一个接着一个地执行（一个任务执行完毕后，再执行下一个任务）
+
+全局并发队列: dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0); //第一个参数: 优先级 第二个参数: 预留值
+
+主队列(串行):
+dispatch_get_main_queue()
+```
+
+说一下 NSOperation 和 GCD 的区别，以及各自的优势
+
+```
+NSOperation是对GCD的封装, 更加面向对象
+```
+
+- 线程安全的处理手段有哪些？
+- OC你了解的锁有哪些？在你回答基础上进行二次提问；
+	- 追问一：自旋和互斥对比？
+	- 追问二：使用以上锁需要注意哪些？
+	- 追问三：用C/OC/C++，任选其一，实现自旋或互斥？口述即可！
+
+```
+线程安全处理手段:
+- 对任务进行加锁/解锁操作
+- 将任务放在同一个串行队列中
+- 信号量
+```
+
+
+
+
+
