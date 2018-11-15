@@ -521,7 +521,6 @@ receiverClass通过superclass指针找到superClass
 “从receiverClass的cache中查找方法”这一步开始执行
 ```
 
-动态添加方法
 <img src="./img/objc_msgSend2-1.png" width="650px" />
 
 - 消息转发
@@ -668,15 +667,62 @@ Autorelease pool（BeforeWaiting）
 - 讲讲 RunLoop，项目中有用到吗？
 
 ```
+Runloop 意思就是 运行循环
+
+主要做用:
+控制线程生命周期（线程保活）, 
+如果想要在子线程中频繁操作,可以通过runloop控制线程的生命周期, 减少线程的重复创建
+
+解决NSTimer在滑动时停止工作的问题
+监控应用卡顿
+性能优化
+
 ```
 
 - runloop内部实现逻辑？
 
 ```
+runloop中保存了模式数组modes, 
+每个mode中存放着一堆集合:source0, source1, observers, timers
+RunLoop启动时只能选择其中一个Mode，作为currentMode
+
+当runloop开始运行之后: 
+1. 通知observers, 当前runloop的状态
+2. 循环处理各种当前mode中source0, source1, timer, block, gcd
+
+具体流程:
+01、通知Observers：进入Loop
+
+int retVal = 0
 do {
+	处理App的各种消息, 
+	如果当前没有消息, 会进入休眠, 等待某个消息唤醒
+	节省cpu资源
 	
-}
-while 循环
+	02、通知Observers：即将处理Timers, Sources
+	03、处理Blocks, Source0
+	04、如果存在Source1，就跳转到第8步
+	05、通知Observers：开始休眠（等待消息唤醒）
+	06、通知Observers：结束休眠（被某个消息唤醒）
+		01> 处理Timer
+		02> 处理GCD Async To Main Queue
+		03> 处理Source1
+	07、处理Blocks
+	08、根据前面的执行结果，决定如何操作
+		01> 回到第02步
+		02> 退出Loop
+	
+	// 睡眠等待消息
+	int message = sleep_and_wait()
+	
+	// 处理消息
+	retValue = process_message(message)
+	
+} while (0 == retValue);
+
+09、通知Observers：退出Loop
+
+如果Mode里没有任何Source0/Source1/Timer/Observer，RunLoop会立马退出
 ```
 
 - runloop和线程的关系？
@@ -692,21 +738,36 @@ RunLoop会在线程结束时销毁
 - timer 与 runloop 的关系？
 
 ```
+runloop当中一个_modes集合, 集合中的有一堆mode, mode中保存了_timers集合
+timer会将runloop从休眠中唤醒, runloop处理timer
 ```
 
 - 程序中添加每3秒响应一次的NSTimer，当拖动tableview时timer可能无法响应要怎么解决？
 
 ```
+scrollView滚动的时候, 会从 NSDefaultRunLoopMode 切换为 UITrackingRunLoopMode, timer可能会无法响应.
+
+解决:
+将timer添加到Runloop, 并标记为NSRunLoopCommonModes
+表示timer在runloop中的_commonModes集合中的保存模式下都能运行
+(该集合中保存了NSDefaultRunLoopMode, UITrackingRunLoopMode, ...)
 ```
 
 - runloop 是怎么响应用户操作的，具体流程是什么样的？
 
 ```
+通过source1捕捉用户的触摸操作, 捕捉到系统事件后, 包装成source0进行处理
 ```
 
 - 说说runLoop的几种状态
 
 ```
+kCFRunloopEntry 即将进入Loop
+kCFRunLoopBeforeTimers 即将处理Timer
+kCFRunloopBeforeSources 即将处理Source
+kCFRunloopBeforeWaiting 即将进入休眠
+kCFRunloopAfterWaiting 刚从休眠中唤醒
+kCFRunloopExit 即将推出loop
 ```
 
 - runloop的mode作用是什么？
@@ -717,11 +778,42 @@ RunLoop会在线程结束时销毁
 
 ### 多线程
 
-- 多线程方案
+#### 多线程方案
 
 <img src="./img/theads.png" width="450px" />
 
 ##### GCD
+
+- 常用函数
+
+```objc
+GCD中有2个用来执行任务的函数:
+
+用同步的方式执行任务
+dispatch_sync(dispatch_queue_t queue, dispatch_block_t block);
+
+用异步的方式执行任务
+dispatch_async(dispatch_queue_t queue, dispatch_block_t block);
+
+queue：队列
+block：任务
+```
+
+- 队列
+
+```
+- 并发队列（Concurrent Dispatch Queue）
+	- 可以让多个任务并发（同时）执行（自动开启多个线程同时执行任务）
+	- 并发功能只有在异步（dispatch_async）函数下才有效
+
+- 串行队列（Serial Dispatch Queue）
+	- 让任务一个接着一个地执行（一个任务执行完毕后，再执行下一个任务）
+```
+
+```
+死锁:
+使用sync函数往当前串行队列中添加任务，会卡住当前的串行队列（产生死锁）
+```
 
 - 队列组
 
@@ -732,6 +824,121 @@ RunLoop会在线程结束时销毁
 ```
 
 <img src="./img/dispatch_group.png" width="550px" />
+
+#### 多线程的安全隐患
+
+- 安全隐患
+
+```
+资源共享
+1块资源可能会被多个线程共享，也就是多个线程可能会访问同一块资源
+比如多个线程访问同一个对象、同一个变量、同一个文件
+
+当多个线程访问同一块资源时，很容易引发数据错乱和数据安全问题
+```
+
+- 解决方案
+
+```
+解决方案：使用线程同步技术（同步，就是协同步调，按预定的先后次序进行）
+常见的线程同步技术是：加锁
+```
+
+#### iOS中的线程同步方案:
+
+##### 1. 加锁:
+
+```
+OSSpinLock
+"自旋锁"，等待锁的线程会处于忙等（busy-wait）状态，一直占用着CPU资源
+目前已经不再安全，可能会出现优先级反转问题
+如果等待锁的线程优先级较高，它会一直占用着CPU资源，优先级低的线程就无法释放锁
+
+os_unfair_lock
+os_unfair_lock用于取代不安全的OSSpinLock ，从iOS10开始才支持
+从底层调用看，等待os_unfair_lock锁的线程会处于休眠状态，并非忙等
+
+pthread_mutex
+mutex叫做”互斥锁”，等待锁的线程会处于休眠状态
+
+NSLock
+NSLock是对mutex普通锁的封装
+
+NSRecursiveLock
+NSRecursiveLock也是对mutex递归锁的封装，API跟NSLock基本一致
+
+NSCondition
+NSCondition是对mutex和cond的封装
+
+NSConditionLock
+NSConditionLock是对NSCondition的进一步封装，可以设置具体的条件值
+
+@synchronized
+@synchronized是对mutex递归锁的封装
+@synchronized(obj)内部会生成obj对应的递归锁，然后进行加锁、解锁操作
+```
+
+- 自旋锁、互斥锁比较:
+
+```
+什么情况使用自旋锁比较划算？
+	- 预计线程等待锁的时间很短
+	- 加锁的代码（临界区）经常被调用，但竞争情况很少发生
+	- CPU资源不紧张
+	- 多核处理器
+
+什么情况使用互斥锁比较划算？
+	- 预计线程等待锁的时间较长
+	- 单核处理器
+	- 临界区有IO操作
+	- 临界区代码复杂或者循环量大
+	- 临界区竞争非常激烈
+```
+
+##### 2. 串行队列 dispatch_queue
+
+```
+将任务放在同一个串行队列中
+dispatch_queue(DISPATCH_QUEUE_SERIAL)
+``` 
+##### 3. 信号量 dispatch_semaphore
+
+```
+semaphore叫做”信号量”
+信号量的初始值，可以用来控制线程并发访问的最大数量
+信号量的初始值为1，代表同时只允许1条线程访问资源，保证线程同步
+
+执行wait函数时, 会判断信号量是否>0
+	- 如果>0, 就将当前信号量-1
+	- 如果<=0, 当前线程进入休眠等待
+
+(需要线程同步的代码)
+	
+执行signal函数时, 会让信号量+1
+```
+
+<img src="./img/dispatch_semaphore.png" width="550px" />
+
+##### 同步方案性能对比:
+
+```
+性能从高到低排序
+os_unfair_lock
+OSSpinLock
+dispatch_semaphore
+pthread_mutex
+dispatch_queue(DISPATCH_QUEUE_SERIAL)
+NSLock
+NSCondition
+pthread_mutex(recursive)
+NSRecursiveLock
+NSConditionLock
+@synchronized
+```
+
+##### atomic 和 nonatomic
+
+
 
 #### 多线程相关问题
 
