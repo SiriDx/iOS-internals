@@ -1053,7 +1053,7 @@ NSTimer依赖于RunLoop，如果RunLoop的任务过于繁重，可能会导致NS
 
 <img src="./img/memory.png" width="700px" />
 
-#### Tagged Pointer
+#### Tagged Pointer (小对象的存储)
 
 ```
 从64bit开始，iOS引入了Tagged Pointer技术，用于优化NSNumber、NSDate、NSString等小对象的存储
@@ -1071,6 +1071,212 @@ iOS平台，最高有效位是1（第64bit）
 Mac平台，最低有效位是1
 ```
 
+#### OC对象的内存管理
+
+```
+在iOS中，使用引用计数来管理OC对象的内存
+
+一个新创建的OC对象引用计数默认是1，当引用计数减为0，OC对象就会销毁，释放其占用的内存空间
+
+调用retain会让OC对象的引用计数+1，调用release会让OC对象的引用计数-1
+
+内存管理的经验总结:
+当调用alloc、new、copy、mutableCopy方法返回了一个对象，在不需要这个对象时，要调用release或者autorelease来释放它
+想拥有某个对象，就让它的引用计数+1；不想再拥有某个对象，就让它的引用计数-1
+
+可以通过以下私有函数来查看自动释放池的情况
+extern void _objc_autoreleasePoolPrint(void);
+```
+
+- MRC
+
+```objc
+@interface MJPerson : NSObject
+@property (nonatomic, retain) MJDog *dog;
+@end
+
+@implementation MJPerson
+
+//@synthesize age = _age;
+// 自动生成成员变量和属性的setter、getter实现
+//(如下代码, dealloc中置未nil的代码仍需要手动写)
+
+- (void)setDog:(MJDog *)dog
+{
+    if (_dog != dog) {
+        [_dog release];
+        _dog = [dog retain];
+    }
+}
+
+- (MJDog *)dog
+{
+    return _dog;
+}
+
+- (void)dealloc
+{
+    self.dog = nil;
+    [super dealloc];
+}
+@end
+```
+
+```objc
+@interface ViewController ()
+@property (retain, nonatomic) NSMutableArray *data;
+@end
+
+@implementation ViewController
+
+- (void)viewDidLoad {
+	// 写法1:
+	self.data = [[NSMutableArray alloc] init];
+	[self.data release];
+	
+	// 写法2:
+	 self.data = [[[NSMutableArray alloc] init] autorelease];
+	
+	// 写法3:
+	// 内部自动调用了一次autorelease
+	self.data = [NSMutableArray array];
+}
+
+- (void)dealloc {
+    self.data = nil;
+    [super dealloc];
+}
+
+@end
+```
+
+- ARC
+
+```
+ARC是LLVM编译器和Runtime系统相互协作的一个结果
+```
+
+#### copy
+
+- copy和mutableCopy
+
+```objc
+// 拷贝的目的：产生一个副本对象，跟源对象互不影响
+// 修改了源对象，不会影响副本对象
+// 修改了副本对象，不会影响源对象
+
+iOS提供了2个拷贝方法
+1.copy，不可变拷贝，产生不可变副本
+2.mutableCopy，可变拷贝，产生可变副本
+ 
+深拷贝和浅拷贝
+1.深拷贝：内容拷贝，产生新的对象
+2.浅拷贝：指针拷贝，没有产生新的对象
+ 
+判断深拷贝还是浅拷贝:
+根据拷贝后的对象是否会影响原来的对象
+```
+
+- copy和集合对象
+
+```
+集合对象: 
+NSArray, NSMutableArray, NSString, NSMutableString...
+
+NSMutableCopy 拷贝集合对象都是深拷贝
+copy, 会判断被拷贝的集合对象是否是可变的
+	- 不可变的, 浅拷贝
+	- 可变的, 深拷贝
+```
+
+- 自定义Copy
+
+```objc
+// 遵循 NSCopying协议
+// 实现copyWithZone方法
+// 在该方法中创建一个新的对象, 并对所有属性进行赋值
+
+@interface MJPerson : NSObject <NSCopying>
+@property (assign, nonatomic) int age;
+@end
+
+@implementation MJPerson
+
+- (id)copyWithZone:(NSZone *)zone
+{
+    MJPerson *person = [[MJPerson allocWithZone:zone] init];
+    person.age = self.age;
+    return person;
+}
+
+@end
+```
+
+#### 引用计数的存储
+
+```
+在64bit中，引用计数可以直接存储在优化过的isa指针中
+
+extra_rc存储的值 = 引用计数值 - 1
+
+has_sidetable_rc
+引用计数器是否过大无法存储在isa中
+如果为1，那么引用计数会存储在一个叫SideTable的类的属性中
+
+refcnts是一个存放着对象引用计数的散列表
+```
+
+```
+引用计数存储在优化过的isa指针中, 如果引用计数器过大, 会存储在sidetable中
+```
+
+<img src="./img/isa_t.png" width="300px" />
+<img src="./img/SideTable.png" width="250px" />
+
+#### weak指针的原理
+
+```objc
+__weak：不会产生强引用，指向的对象销毁时，会自动让指针置为nil
+__unsafe_unretained：不会产生强引用，不安全，指向的对象销毁时，指针存储的地址值不变
+
+当一个对象要释放时，会自动调用dealloc
+dealloc方法中会, 根据当前对象的isa指针判断当前对象是否存在弱引用
+isa指针, 是通过共用体的形式, 记录了当前对象是否存在弱引用
+(weakly_referenced, 占用8个字节)
+```
+
+#### 自动释放池
+
+- OC
+
+```objc
+@autoreleasepool {}
+```
+
+```c
+自动释放池的主要底层数据结构是：
+__AtAutoreleasePool、AutoreleasePoolPage
+
+调用了autorelease的对象最终都是通过AutoreleasePoolPage对象来管理的
+```
+
+- 底层实现
+
+```c
+struct __AtAutoreleasePool {
+	// 构造函数，在创建结构体的时候调用
+    __AtAutoreleasePool() { 
+        atautoreleasepoolobj = objc_autoreleasePoolPush();
+    }
+ 	
+ 	// 析构函数，在结构体销毁的时候调用
+    ~__AtAutoreleasePool() { 
+        objc_autoreleasePoolPop(atautoreleasepoolobj);
+    }
+ 
+    void * atautoreleasepoolobj;
+ };
+```
 
 #### 内存管理相关问题
 
