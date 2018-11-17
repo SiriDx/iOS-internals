@@ -1250,8 +1250,20 @@ isa指针, 是通过共用体的形式, 记录了当前对象是否存在弱引�
 - OC
 
 ```objc
-@autoreleasepool {}
+@autoreleasepool {
+	MJPerson *person = [[[MJPerson alloc] init];
+}
 ```
+
+```objc
+atautoreleasepoolobj = objc_autoreleasePoolPush();
+ 
+MJPerson *person = [[[MJPerson alloc] init] autorelease];
+ 
+objc_autoreleasePoolPop(atautoreleasepoolobj);
+```
+
+- 底层实现
 
 ```c
 自动释放池的主要底层数据结构是：
@@ -1259,8 +1271,6 @@ __AtAutoreleasePool、AutoreleasePoolPage
 
 调用了autorelease的对象最终都是通过AutoreleasePoolPage对象来管理的
 ```
-
-- 底层实现
 
 ```c
 struct __AtAutoreleasePool {
@@ -1320,10 +1330,57 @@ iOS在主线程的Runloop中注册了2个Observer:
 
 ARC 都帮我们做了什么？
 LLVM + Runtime
-
-weak指针的实现原理
-
-autorelease对象在什么时机会被调用release
-
-方法里有局部对象， 出了方法后会立即释放吗
 ```
+
+- weak指针的实现原理
+
+```
+__weak：不会产生强引用，指向的对象销毁时，会自动让指针置为nil
+__unsafe_unretained：不会产生强引用，不安全，指向的对象销毁时，指针存储的地址值不变
+
+当一个对象要释放时，会自动调用dealloc
+dealloc方法中会, 根据当前对象的isa指针判断当前对象是否存在弱引用
+isa指针, 是通过共用体的形式, 记录了当前对象是否存在弱引用
+(weakly_referenced, 占用8个字节)
+```
+
+- @autoreleasePool实现原理
+
+```
+定义了一个 __AtAutoreleasePool变量
+调用构造函数atautoreleasepoolobj = objc_autoreleasePoolPush()
+
+当前代码块执行完毕之后, 当前变量被销毁, 调用它的析构函数, objc_autoreleasePoolPop(atautoreleasepoolobj);
+
+通过AutoreleasePoolPage对象(4096个字节), 存储当前自动释放池中调用了autorelease的对象的地址值
+不够存储的时候, 会创建新的AutoreleasePoolPage对象
+这些AutoreleasePoolPage对象之间通过双向链表形式连接在一起
+
+调用push方法会将一个POOL_BOUNDARY入栈，并且返回其存放的内存地址(atautoreleasepoolobj)
+
+调用pop方法时传入一个POOL_BOUNDARY的内存地址(atautoreleasepoolobj)
+会从最后一个入栈的对象开始发送release消息，直到遇到这个POOL_BOUNDARY
+```
+
+- autorelease中的对象在什么时机会被调用release
+
+```
+autorelease中的对象调用release由Runloop决定
+
+iOS在主线程的Runloop中注册了2个Observer:
+
+第1个Observer监听了kCFRunLoopEntry事件(进入runloop), 会调用objc_autoreleasePoolPush()
+
+第2个Observer
+- 监听了kCFRunLoopBeforeWaiting事件(runloop休眠)，会调用objc_autoreleasePoolPop()、objc_autoreleasePoolPush()
+- 监听了kCFRunLoopBeforeExit事件(runloop退出)，会调用objc_autoreleasePoolPop()
+```
+
+- 方法里有局部对象， 出了方法后会立即释放吗
+
+```
+具体看ARC生成的release代码方法:
+- 1. 通过调用对象的autorelease方法对当前对象进行释放的话, 是在runloop休眠之前进行释放
+- 2. 直接在代码后面插入调用当前对象的release方法, 会立即释放
+```
+
