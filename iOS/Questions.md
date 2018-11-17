@@ -116,11 +116,49 @@ Category编译之后的底层结构是struct category_t
 - Category和Class Extension的区别是什么？
 
 ```
-Class Extension(类拓展)
-- 在编译的时候，它的数据就已经包含在类信息中
+Class Extension(类拓展): 在编译的时候，它的数据就已经包含在类信息中
+Category(分类): 是在运行时，才会将数据合并到类信息中
+```
 
-Category(分类)
-- 是在运行时，才会将数据合并到类信息中
+- Category中有load方法吗？load方法是什么时候调用的？load 方法能继承吗？
+
+```
+有load方法
+load方法在runtime加载类、分类的时候调用
+load方法可以继承，但是一般情况下不会主动去调用load方法，都是让系统自动调用
+```
+
+- load、initialize方法的区别什么？它们在category中的调用的顺序？以及出现继承时他们之间的调用过程？
+
+```
+load方法: 类加载进内存的时候调用
+initialize方法: 类第一个接收到消息的时候调用
+
+```
+
+- Category能否添加成员变量？如果可以，如何给Category添加成员变量？
+
+```
+不能直接给Category添加成员变量，但是可以间接实现Category有成员变量的效果
+```
+
+- block的原理是怎样的？本质是什么？
+
+```
+封装了函数调用以及调用环境的OC对象
+```
+
+- block的属性修饰词为什么是copy？使用block有哪些使用注意？
+
+```
+```
+
+- __block的作用是什么？有什么使用注意点？
+
+```
+解决block内部, 无法修改外部auto变量值的问题
+
+__block本质是, 将其修饰的变量包装成一个对象,
 ```
 
 ## 内存管理
