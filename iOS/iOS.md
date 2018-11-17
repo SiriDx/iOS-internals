@@ -1,5 +1,9 @@
 # iOS
 1. [OC语法](#OC语法)
+	- [KVO](#KVO)
+	- [KVC](#KVC)
+	- [Category](#Category)
+	- [Block](#Block)
 2. [Runtime](#runtime)
 3. [RunLoop](#runLoop)
 4. [多线程](#多线程)
@@ -8,7 +12,7 @@
 7. [设计模式与架构](#设计模式与架构)
 
 ## OC语法
-### 面向对象
+#### 面向对象
 
 - 一个NSObject对象占用多少内存？
 
