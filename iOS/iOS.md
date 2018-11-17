@@ -1278,6 +1278,37 @@ struct __AtAutoreleasePool {
  };
 ```
 
+##### AutoreleasePoolPage
+
+<img src="./img/AutoreleasePoolPage.png" width="300px" />
+
+- AutoreleasePoolPage的结构
+
+```
+每个AutoreleasePoolPage对象占用4096字节内存，除了用来存放它内部的成员变量，剩下的空间用来存放autorelease对象的地址
+所有的AutoreleasePoolPage对象通过双向链表的形式连接在一起
+
+调用push方法会将一个POOL_BOUNDARY入栈，并且返回其存放的内存地址
+
+调用pop方法时传入一个POOL_BOUNDARY的内存地址，会从最后一个入栈的对象开始发送release消息，直到遇到这个POOL_BOUNDARY
+
+id *next指向了下一个能存放autorelease对象地址的区域
+```
+
+<img src="./img/AutoreleasePoolPage2.png" width="600px" />
+
+##### Runloop和Autorelease
+
+```
+iOS在主线程的Runloop中注册了2个Observer:
+
+第1个Observer监听了kCFRunLoopEntry事件，会调用objc_autoreleasePoolPush()
+
+第2个Observer
+- 监听了kCFRunLoopBeforeWaiting事件，会调用objc_autoreleasePoolPop()、objc_autoreleasePoolPush()
+- 监听了kCFRunLoopBeforeExit事件，会调用objc_autoreleasePoolPop()
+```
+
 #### 内存管理相关问题
 
 ```
