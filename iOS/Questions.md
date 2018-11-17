@@ -122,3 +122,18 @@ Class Extension(类拓展)
 Category(分类)
 - 是在运行时，才会将数据合并到类信息中
 ```
+
+## 内存管理
+
+- imageNamed:和imageWithContentsOfFile:区别
+
+```
+imageNamed: 通过文件名加载图片
+- 通过传入的名字, 去文件夹中遍历查找对应的图片, 将找到图片保存在内存缓存中, 方便下一次使用
+
+imageWithContentsOfFile: 根据图片路径加载图片
+- 图像数据不会被缓存
+
+当图片文件较小, 使用比较频繁的时候那么使用imageNamed:
+当你不需要重用该图片时, 可以考虑使用imageWithContentsOfFile:
+```
