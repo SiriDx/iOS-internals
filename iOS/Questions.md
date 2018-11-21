@@ -171,8 +171,16 @@ a) 先编译的分类，优先调用load
 默认情况下，因为分类底层结构的限制，不能添加成员变量到分类中。
 但可以通过关联对象来间接实现
 
-关联对象并不是存储在被关联对象的内存中, 而是存储在一个全局统一的AssociationsManager中
-
+关联对象并不是存储在被关联对象的内存中,
+而是存储在一个全局统一的AssociationsManager中
+manager.map = 
+{
+ "对象1" : objectAssociationMap,
+ "对象2" : objectAssociationMap {
+ 		//objectAssociation中保存了policy, value
+ 		"传入的key1": objectAssociation
+ 	}
+}
 通过设置关联对象为nil, 来移除关联对象
 ```
 
@@ -274,7 +282,7 @@ OC的动态性就是由Runtime来支撑和实现的，Runtime是一套C语言的
 ......
 ```
 
-#### 代码分析
+##### 代码分析
 
 ```objc
 @interface Person : NSObject
@@ -390,6 +398,48 @@ print可以调用成功:
 调用方法的本质, 找到类对象, 找到相应的对象方法
 
 栈帧: 高地址 -> 低地址 入栈
+```
+
+## RunLoop
+
+- 讲讲 RunLoop，项目中有用到吗？
+
+```
+```
+
+- runloop内部实现逻辑？
+
+```
+```
+
+- runloop和线程的关系？
+
+```
+```
+
+- timer 与 runloop 的关系？
+
+```
+```
+
+- 程序中添加每3秒响应一次的NSTimer，当拖动tableview时timer可能无法响应要怎么解决？
+
+```
+```
+
+- runloop 是怎么响应用户操作的， 具体流程是什么样的？
+
+```
+```
+
+- 说说runLoop的几种状态
+
+```
+```
+
+- runloop的mode作用是什么？
+
+```
 ```
 
 ## 内存管理
