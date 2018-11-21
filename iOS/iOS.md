@@ -547,6 +547,8 @@ receiverClass通过superclass指针找到superClass
 
 #### super关键字
 
+- 通过命令行编译后
+
 ```objc
 通过super调用方法的本质:
 调用函数: objc_msgSendSuper(arg1, @selector(方法名)), 并传入两个参数
@@ -561,6 +563,17 @@ struct objc_super {
 
 - 参数2: 具体调用的方法
 ```
+
+-  真正底层实现
+
+```objc
+super调用，底层会转换为objc_msgSendSuper2函数的调用，接收2个参数
+
+- receiver是消息接收者
+- current_class是receiver的Class对象
+```
+<img src="./img/objc_msgSendSuper2.png" width="250px" />
+
 
 #### Runtime相关问题
 

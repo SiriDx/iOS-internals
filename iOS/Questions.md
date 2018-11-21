@@ -274,15 +274,27 @@ OC的动态性就是由Runtime来支撑和实现的，Runtime是一套C语言的
 ......
 ```
 
-- 打印结果分别是什么？
+#### 代码分析
 
 ```objc
 @interface Person : NSObject
+
+@property (copy, nonatomic) NSString *name;
+
 @end
 
 @implementation Person
-@end
 
+- (void)print
+{
+    NSLog(@"my name is %@", self->_name);
+}
+
+@end
+```
+- 打印结果分别是什么？
+
+```objc
 @interface Student : Person
 @end
 
@@ -295,8 +307,9 @@ OC的动态性就是由Runtime来支撑和实现的，Runtime是一套C语言的
 		[self class]; // Student
 		[self superclass]; // Person
 
-		// objc_msgSendSuper({self, [MJPerson class]}, @selector(class));
-		// super调用方法时候, 消息接收者依然是self
+		// objc_msgSendSuper({self, currentClass}, @selector(class));
+		// super调用方法时候, 消息接收者依然是self(方法调用者)
+		// 传入一个currentClass, 找到superClass, 表示从父类开始查找class方法
 		[super class]; // Student
 		[super superclass]; // Person
     }
@@ -305,18 +318,79 @@ OC的动态性就是由Runtime来支撑和实现的，Runtime是一套C语言的
 
 @end
 
-[NSObject isKindOfClass:[NSObject class]];
-[NSObject isMemberOfClass:[NSObject class]];
-[Person isKindOfClass:[NSObject class]];
-[Person isMemberOfClass:[NSObject class]];
+```
+
+```objc
+// NSObject元类对象中的superclass指针指向NSObject的类对象
+[NSObject isKindOfClass:[NSObject class]]; //YES
+
+[NSObject isMemberOfClass:[NSObject class]]; // NO
+[Person isKindOfClass:[NSObject class]]; // NO
+[Person isMemberOfClass:[NSObject class]]; // NO
+
+// isKindOfClass和isMemberOfClass的底层实现
+@implementation NSObject
+
+// 当前对象的类对象 是否等于 传入的类对象 
+- (BOOL)isMemberOfClass:(Class)cls {
+    return [self class] == cls;
+}
+
+// 当前对象的类对象 是否等于 传入的类对象或者类对象的父类
+- (BOOL)isKindOfClass:(Class)cls {
+    for (Class tcls = [self class]; tcls; tcls = tcls->superclass) {
+        if (tcls == cls) return YES;
+    }
+    return NO;
+}
+
+// 当前类对象的元类对象 是否等于 传入的元类对象
++ (BOOL)isMemberOfClass:(Class)cls {
+    return object_getClass((id)self) == cls;
+}
+
+// 当前类对象的元类对象 是否等于 传入的元类对象或者元类对象的父类
++ (BOOL)isKindOfClass:(Class)cls {
+    for (Class tcls = object_getClass((id)self); tcls; tcls = tcls->superclass) {
+        if (tcls == cls) return YES;
+    }
+    return NO;
+}
+@end
 ```
 
 - 以下代码能不能执行成功？如果可以，打印结果是什么？
 
-```
+```objc
+- (void)viewDidLoad {
+	[super viewDidLoad];
+	/*
+	结构体: {
+		self,
+		superClass
+	}
+	
+	objc_msgSendSuper({self, [UIViewController class]}, @selector(viewDidLoad));
+	*/
+	
+	// 如果初始化该字符串变量, 打印结果: 123
+	// NSString *test = "123";
+	
+	id cls = [Person class];
+	void *obj = &cls;
+	[(__bridge id)obj print];
+}
 ```
 
+```
+可以执行成功, 不崩溃
+打印self (打印cls前面地址中保存的数据)
 
+print可以调用成功: 
+调用方法的本质, 找到类对象, 找到相应的对象方法
+
+栈帧: 高地址 -> 低地址 入栈
+```
 
 ## 内存管理
 
