@@ -9,12 +9,30 @@
 #import "ViewController.h"
 
 @interface Person : NSObject
-
-@property (copy, nonatomic) NSMutableArray *data;
-
+@end
+@implementation Person
 @end
 
-@implementation Person
+@interface Student : Person
+@end
+
+@implementation Student
+
+- (instancetype)init {
+    
+    if (self = [super init]) {
+        
+        NSLog(@"[self class] = %@", [self class]); // Student
+        NSLog(@"[self superclass] = %@", [self superclass]); // Person
+        
+        // objc_msgSendSuper({self, [MJPerson class]}, @selector(class));
+        NSLog(@"[super class] = %@", [super class]); // Student
+        NSLog(@"[super superclass] = %@", [super superclass]); // Person
+        
+    }
+    return self;
+}
+
 @end
 
 @interface ViewController ()
@@ -26,9 +44,10 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    Person *p = [[Person alloc] init];
-    [p.data addObject:@"jack"];
-    [p.data addObject:@"rose"];
+    BOOL res1 = [NSObject isKindOfClass:[NSObject class]];
+    BOOL res2 = [NSObject isMemberOfClass:[NSObject class]];
+    BOOL res3 = [Person isKindOfClass:[NSObject class]];
+    BOOL res4 = [Person isMemberOfClass:[NSObject class]];
     
 }
 

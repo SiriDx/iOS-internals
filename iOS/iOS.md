@@ -545,6 +545,23 @@ receiverClass通过superclass指针找到superClass
 以上方法都有对象方法、类方法2个版本（前面可以是加号+，也可以是减号-）
 ```
 
+#### super关键字
+
+```objc
+通过super调用方法的本质:
+调用函数: objc_msgSendSuper(arg1, @selector(方法名)), 并传入两个参数
+
+- 参数1: objc_super 结构体对象
+struct objc_super {
+	// 消息接收者: 仍然是当前对象(self)
+    __unsafe_unretained _Nonnull id receiver; 
+    // 消息接收者的父类: 表示从当前类开始查找方法
+    __unsafe_unretained _Nonnull Class super_class; 
+};
+
+- 参数2: 具体调用的方法
+```
+
 #### Runtime相关问题
 
 - 讲一下 OC 的消息机制

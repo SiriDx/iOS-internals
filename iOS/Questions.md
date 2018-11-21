@@ -222,9 +222,101 @@ __block本质是, 编译器会将__block修饰的变量包装成一个对象
 
 ```
 不需要.
-block通过动态捕获, 保存的是数组对象的地址值
+block通过动态捕获外部的auto变量, 保存的是数组对象的地址值
 可以直接根据这个地址直接进行数组的添加删除操作
 ```
+
+## Runtime
+
+- 讲一下 OC 的消息机制
+
+```
+OC中的方法调用其实都是转成了objc_msgSend函数的调用，给receiver（方法调用者）发送了一条消息（selector方法名）
+
+objc_msgSend底层有3大阶段:
+消息发送（当前类、父类中查找）、动态方法解析、消息转发
+```
+
+- 消息发送流程
+
+```
+消息发送阶段:
+1. 消息接收者是否为nil? 
+2. 不为nil, 从方法缓存中查找, 找到直接调用
+3. 缓存中没有, 去方法列表中查找, 如果找到就调用该方法, 并且将该方法缓存中
+4. 当前类方法列表中找不到, 通过superclass指针, 去父类的方法列表中查找, 如果找到就调用该方法, 并且将该方法存在缓存中
+
+动态方法解析
+5. 如果通过superclass都没有找到, 判断是否做过动态解析
+6. 如果没有会调用+resolveInstanceMethod:或+resolveClassMethod:来动态解析方法(在该方法中可以动态添加方法), 并标记为做过动态解析, 从新走一遍消息发送流程
+
+消息转发
+7. 如果已经做过动态解析, 则进入消息转发
+- 调用消息转发(forwardingTargetForSelector:)方法, 通过返回值转发给其他目标对象, 进行消息发送
+- 如果返回值为nil, 调用方法签名(methodSignatureForSelector:方法), 返回值为nil, 调用doesNotRecognizeSelector:方法
+- 返回值不为nil, 调用转发invocation(forwardInvocation:方法)
+```
+
+- 什么是Runtime？平时项目中有用过么？
+
+```
+OC是一门动态性比较强的编程语言，允许很多操作推迟到程序运行时再进行
+OC的动态性就是由Runtime来支撑和实现的，Runtime是一套C语言的API，封装了很多动态性相关的函数
+平时编写的OC代码，底层都是转换成了Runtime API进行调用
+```
+- Runtime具体应用
+
+```
+利用关联对象（AssociatedObject）给分类添加属性
+遍历类的所有成员变量（修改textfield的占位文字颜色、字典转模型、自动归档解档）
+交换方法实现（交换系统的方法）
+利用消息转发机制解决方法找不到的异常问题
+......
+```
+
+- 打印结果分别是什么？
+
+```objc
+@interface Person : NSObject
+@end
+
+@implementation Person
+@end
+
+@interface Student : Person
+@end
+
+@implementation Student
+
+- (instancetype)init {
+    
+    if (self = [super init]) {
+        
+		[self class]; // Student
+		[self superclass]; // Person
+
+		// objc_msgSendSuper({self, [MJPerson class]}, @selector(class));
+		// super调用方法时候, 消息接收者依然是self
+		[super class]; // Student
+		[super superclass]; // Person
+    }
+    return self;
+}
+
+@end
+
+[NSObject isKindOfClass:[NSObject class]];
+[NSObject isMemberOfClass:[NSObject class]];
+[Person isKindOfClass:[NSObject class]];
+[Person isMemberOfClass:[NSObject class]];
+```
+
+- 以下代码能不能执行成功？如果可以，打印结果是什么？
+
+```
+```
+
+
 
 ## 内存管理
 
