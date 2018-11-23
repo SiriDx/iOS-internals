@@ -668,7 +668,186 @@ dispatch_barrier_async：异步栅栏调用
 
 ```
 
+#### 代码分析
+
+- 请问下面代码的打印结果是什么？
+
+<img src="./img/thread01.png" width="500px" />
+
+```
+打印结果是：1、3
+原因:
+performSelector:withObject:afterDelay:
+本质是往Runloop中添加定时器, 子线程默认没有启动Runloop
+```
+
+<img src="./img/thread02.png" width="500px" />
+
+```
+打印结果是：1, 造成崩溃(等待执行任务过程中, 目标线程已经退出)
+原因:
+
+performSelector:onThread:
+本质是唤醒当前线程的runloop, 并处理消息
+thread调用start方法, 执行完打印1的任务后, 线程就退出了
+可以通过runLoop进行线程保活
+```
+
 ## 内存管理
+
+- 使用CADisplayLink、NSTimer有什么注意点？
+
+```
+CADisplayLink、NSTimer会对传入的target产生强引用
+如果target又对它们产生强引用，那么就会引发循环引用
+
+解决方案:
+- Block
+- 使用代理对象(NSProxy), 转发方法调用
+
+NSTimer依赖于RunLoop，如果RunLoop的任务过于繁重，可能会导致NSTimer不准时
+GCD的定时器会更加准时
+```
+
+- 介绍下内存的几大区域
+
+```
+保留
+代码段: 编译之后的代码
+数据段: 
+	- 字符串常量
+	- 全局变量, 静态变量 (已初始化/未初始化)
+堆: 通过alloc, malloc, calloc等动态分配的空间
+栈: 函数调用的开销, 从 高->低 分配内存地址
+内核区
+
+地址: 上 -> 下, 低 -> 高
+```
+
+- Tagged Pointer
+
+```
+从64bit开始，iOS引入了Tagged Pointer技术
+用于优化NSNumber、NSDate、NSString等小对象的存储
+
+在没有使用Tagged Pointer之前， NSNumber等对象需要动态分配内存、维护引用计数等，NSNumber指针存储的是堆中NSNumber对象的地址值
+使用Tagged Pointer之后，NSNumber指针里面存储的数据变成了：Tag + Data，也就是将数据直接存储在了指针中, 当指针不够存储数据时，才会使用动态分配内存的方式来存储数据
+```
+
+- 思考以下2段代码能发生什么事？有什么区别？
+
+<img src="./img/TaggedPointer.png" width="500px" />
+
+```
+第一段代码崩溃, 第二段代码正常运行
+
+原因: 
+
+第一段:
+self.name的本质是调用setter方法
+ARC下中setter方法本质, 生成ARC相关代码, 最终会调用_name的release方法
+多个线程操作同一个对象, _name对象会被释放两次, 造成坏内存访问
+
+解决方案: 1. 加锁  2. atomic修饰name属性
+
+第二段:
+使用了Tagged Pointer, 直接从地址中取值, 没有管理对象的相关代码
+```
+
+- 讲一下你对 iOS 内存管理的理解
+
+```
+在iOS中，使用引用计数来管理OC对象的内存
+一个新创建的OC对象引用计数默认是1，当引用计数减为0，OC对象就会销毁，释放其占用的内存空间
+调用retain会让OC对象的引用计数+1，调用release会让OC对象的引用计数-1
+
+MRC: 手动内存管理
+ARC: 自动内存管理 (ARC是LLVM编译器和Runtime系统相互协作的一个结果)
+```
+
+- ARC 都帮我们做了什么？
+
+```
+LLVM + Runtime
+使用LLVM生成内存管理的相关代码
+调用Runtime, 计算对象引用计数, 进行内存管理
+```
+
+- copy和mutableCopy, 深拷贝和浅拷贝
+
+```
+拷贝的目的：产生一个副本对象，跟源对象互不影响
+
+iOS提供了2个拷贝方法
+1.copy，不可变拷贝，产生不可变副本
+2.mutableCopy，可变拷贝，产生可变副本
+ 
+iOS中的拷贝分为: 深拷贝和浅拷贝
+1.深拷贝：内容拷贝，产生新的对象
+2.浅拷贝：指针拷贝，没有产生新的对象
+ 
+判断深拷贝还是浅拷贝:
+根据拷贝后的对象是否会影响原来的对象
+
+集合对象: NSArray, NSMutableArray, NSString, NSMutableString等...
+
+copy, 会判断被拷贝的集合对象是否是可变的
+	- 不可变的, 浅拷贝
+	- 可变的, 深拷贝
+NSMutableCopy 拷贝集合对象都是深拷贝
+```
+
+- weak指针的实现原理
+
+```
+__weak：不会产生强引用，指向的对象销毁时，会自动让指针置为nil
+__unsafe_unretained：不会产生强引用，不安全，指向的对象销毁时，指针存储的地址值不变
+
+当一个对象要释放时，会自动调用dealloc
+dealloc方法中会, 根据当前对象的isa指针判断当前对象是否存在弱引用
+isa指针, 是通过共用体的形式, 记录了当前对象是否存在弱引用
+(weakly_referenced, 占用8个字节)
+```
+
+- @autoreleasePool实现原理
+
+```
+定义了一个__AtAutoreleasePool结构体变量
+调用构造函数atautoreleasepoolobj = objc_autoreleasePoolPush()
+
+当前代码块执行完毕之后, 当前变量被销毁, 调用它的析构函数, objc_autoreleasePoolPop(atautoreleasepoolobj);
+
+通过AutoreleasePoolPage对象(4096个字节), 存储当前自动释放池中调用了autorelease的对象的地址值
+不够存储的时候, 会创建新的AutoreleasePoolPage对象
+这些AutoreleasePoolPage对象之间通过双向链表形式连接在一起
+
+调用push方法会将一个POOL_BOUNDARY入栈，并且返回其存放的内存地址(atautoreleasepoolobj)
+
+调用pop方法时传入一个POOL_BOUNDARY的内存地址(atautoreleasepoolobj)
+会从最后一个入栈的对象开始发送release消息，直到遇到这个POOL_BOUNDARY
+```
+
+- autorelease中的对象在什么时机会被调用release
+
+```
+autorelease中的对象调用release由Runloop决定
+
+iOS在主线程的Runloop中注册了2个Observer:
+
+第1个Observer监听了kCFRunLoopEntry事件(进入runloop), 会调用objc_autoreleasePoolPush()
+
+第2个Observer
+- 监听了kCFRunLoopBeforeWaiting事件(runloop休眠)，会调用objc_autoreleasePoolPop()、objc_autoreleasePoolPush()
+- 监听了kCFRunLoopBeforeExit事件(runloop退出)，会调用objc_autoreleasePoolPop()
+```
+
+- 方法里有局部对象， 出了方法后会立即释放吗
+
+```
+具体看ARC生成的release代码方法:
+- 1. 通过调用对象的autorelease方法对当前对象进行释放的话, 是在runloop休眠之前进行释放
+- 2. 直接在代码后面插入调用当前对象的release方法, 会立即释放
+```
 
 - imageNamed:和imageWithContentsOfFile:区别
 
