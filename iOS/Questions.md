@@ -405,41 +405,267 @@ print可以调用成功:
 - 讲讲 RunLoop，项目中有用到吗？
 
 ```
+主要做用:
+控制线程生命周期（线程保活）, 
+如果想要在子线程中频繁操作,可以通过runloop控制线程的生命周期, 减少线程的重复创建
+
+解决NSTimer在滑动时停止工作的问题
+监控应用卡顿
+性能优化
 ```
 
 - runloop内部实现逻辑？
 
 ```
+运行循环
+相当于do while循环中不断处理消息
+没有消息的时候进入休眠, 等待其他消息唤醒
+处理完消息后, 会根据对应的返回值来决定是否退出当前循环
+
+每条线程都有一个与之对应的runloop对象
+主线程的RunLoop在程序运行中自动创建
+子线程的Runloop在当前线程第一个获取runloop对象的时候创建
+
+一个Runloop对象中, 保存了很多模式
+每个模式中保存一堆集合: source0, source1, observers, timers
+runloop对象会选择其中一个模式作为当前模式
+
+当runloop开始运行:
+- 1. 通知observers: 进入循环
+- 2. 通知observers: 即将开始处理Timers, 即将处理Sources
+- 3. 处理Blocks和Source0
+- 4. 判断是否有source1
+	- 没有source1, 通知observers开始休眠
+- 5. 通知observers结束休眠
+	- 处理Timer, GCD
+	- 处理Source1 (如果刚刚有source1会先处理source1)
+- 6. 根据执行结果(是否等于0)
+	-  回到第2步
+	-  退出当前循环
 ```
 
 - runloop和线程的关系？
 
 ```
+每条线程都有唯一的一个与之对应的RunLoop对象
+RunLoop保存在一个全局的字典里，线程作为key，RunLoop作为value
+
+线程刚创建时并没有RunLoop对象，RunLoop会在第一次获取它时创建
+主线程的RunLoop已经自动获取（创建），子线程默认没有开启RunLoop
+
+RunLoop会在线程结束时销毁
 ```
 
 - timer 与 runloop 的关系？
 
 ```
+常见的2种Mode:
+kCFRunLoopDefaultMode（NSDefaultRunLoopMode）：App的默认Mode，通常主线程是在这个Mode下运行
+UITrackingRunLoopMode：界面跟踪 Mode，用于 ScrollView 追踪触摸滑动，保证界面滑动时不受其他 Mode 影响
 ```
 
 - 程序中添加每3秒响应一次的NSTimer，当拖动tableview时timer可能无法响应要怎么解决？
 
 ```
+当scrollView滚动的时候
+会从默认模式(NSDefaultRunLoopMode), 切换为跟踪模式(UITrackingRunLoopMode)
+在跟踪模式下, timer无法响应
+
+每个runLoop对象有一个commonModes集合
+通过将timer标记为commonMode, 表示定时器在commonModes集合中的模式都可以运行
 ```
 
 - runloop 是怎么响应用户操作的， 具体流程是什么样的？
 
 ```
+通过source1捕捉用户的触摸操作, 捕捉到系统事件后, 包装成source0进行处理
 ```
 
 - 说说runLoop的几种状态
 
 ```
+kCFRunloopEntry 即将进入Loop
+kCFRunLoopBeforeTimers 即将处理Timer
+kCFRunloopBeforeSources 即将处理Source
+kCFRunloopBeforeWaiting 即将进入休眠
+kCFRunloopAfterWaiting 刚从休眠中唤醒
+kCFRunloopExit 即将推出loop
 ```
 
 - runloop的mode作用是什么？
 
 ```
+分隔不同模式下的Source0/Source1/Timer/Observer
+通过不同的运行模式, 隔离不同的事件
+```
+
+## 多线程
+
+- 你理解的多线程？
+
+```
+每个程序在运行中会开启一个进程, 每个进程中至少开启一条线程(主线程), 来处理任务
+为了提高效率，可以在一个进程中开启多个线程, 并发执行不同任务
+
+一般在主线程中刷新UI, 子线程中处理一些耗时操作(如图片下载)
+
+iOS中常用多线程实现方案:
+pthread, NSThread, GCD, NSOperation 
+```
+
+- iOS的多线程方案有哪几种？你更倾向于哪一种？
+
+```
+pthread, NSThread (对pthread的封装)
+GCD, NSOperation (对GCD的封装)
+```
+
+- 你在项目中用过 GCD 吗？
+
+```
+GCD中有2个用来执行任务的函数: 同步函数 和 异步函数
+
+- 并发队列（Concurrent Dispatch Queue）
+	- 可以让多个任务并发（同时）执行（自动开启多个线程同时执行任务）
+	- 并发功能只有在异步（dispatch_async）函数下才有效
+
+- 串行队列（Serial Dispatch Queue）
+	- 让任务一个接着一个地执行（一个任务执行完毕后，再执行下一个任务）
+
+死锁:
+使用 同步函数 往 当前串行队列 中添加任务，会卡住当前的串行队列（产生死锁）
+```
+
+- GCD 的队列类型
+
+```
+- 并发队列（Concurrent Dispatch Queue）
+	- 可以让多个任务并发（同时）执行（自动开启多个线程同时执行任务）
+	- 并发功能只有在异步（dispatch_async）函数下才有效
+
+- 串行队列（Serial Dispatch Queue）
+	- 让任务一个接着一个地执行（一个任务执行完毕后，再执行下一个任务）
+
+主队列(串行):
+dispatch_get_main_queue()
+
+全局并发队列: 
+//第一个参数: 优先级 第二个参数: 预留值
+dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0); 
+```
+
+- 说一下 OperationQueue 和 GCD 的区别，以及各自的优势
+
+```
+NSOperation是对GCD的封装, 更加面向对象
+```
+
+- 线程安全的处理手段有哪些？同步方案?
+
+```
+线程安全处理手段:
+- 对任务进行加锁/解锁操作
+- 将任务放在同一个串行队列中(dispatch_queue(DISPATCH_QUEUE_SERIAL))
+- 信号量(将信号量值设为1)
+```
+
+- OC你了解的锁有哪些？在你回答基础上进行二次提问；
+	- 追问一：自旋和互斥对比？
+	- 追问二：使用以上锁需要注意哪些？
+	- 追问三：用C/OC/C++，任选其一，实现自旋或互斥？口述即可！
+
+```
+OSSpinLock
+"自旋锁"，等待锁的线程会处于忙等（busy-wait）状态，一直占用着CPU资源
+目前已经不再安全，可能会出现优先级反转问题
+如果等待锁的线程优先级较高，它会一直占用着CPU资源，优先级低的线程就无法释放锁
+
+os_unfair_lock
+os_unfair_lock用于取代不安全的OSSpinLock ，从iOS10开始才支持
+从底层调用看，等待os_unfair_lock锁的线程会处于休眠状态，并非忙等
+
+pthread_mutex
+mutex叫做”互斥锁”，等待锁的线程会处于休眠状态
+
+NSLock
+NSLock是对mutex普通锁的封装
+
+NSRecursiveLock
+NSRecursiveLock也是对mutex递归锁的封装，API跟NSLock基本一致
+
+NSCondition
+NSCondition是对mutex和cond的封装
+
+NSConditionLock
+NSConditionLock是对NSCondition的进一步封装，可以设置具体的条件值
+
+@synchronized
+@synchronized是对mutex递归锁的封装
+@synchronized(obj)内部会生成obj对应的递归锁，然后进行加锁、解锁操作
+```
+
+```
+自旋锁, 等待锁的线程会处于忙等（busy-wait）状态，一直占用着CPU资源
+互斥锁，等待锁的线程会处于休眠状态, 不占用CPU资源
+
+线程等待锁的时间较长时, 可以考虑使用自旋锁
+时间较长, 使用互斥锁
+
+什么情况使用自旋锁比较划算？
+	- 预计线程等待锁的时间很短
+	- 加锁的代码（临界区）经常被调用，但竞争情况很少发生
+	- CPU资源不紧张
+	- 多核处理器
+
+什么情况使用互斥锁比较划算？
+	- 预计线程等待锁的时间较长
+	- 单核处理器
+	- 临界区有IO操作
+	- 临界区代码复杂或者循环量大
+	- 临界区竞争非常激烈
+```
+
+- 同步方案性能对比
+
+```
+性能从高到低排序
+os_unfair_lock(iOS 10)
+OSSpinLock (自旋锁, 占用CPU资源, 线程优先级问题)
+dispatch_semaphore (信号量, 将信号量值设置为1)
+pthread_mutex
+dispatch_queue(DISPATCH_QUEUE_SERIAL)
+NSLock
+NSCondition
+pthread_mutex(recursive)
+NSRecursiveLock
+NSConditionLock
+@synchronized
+```
+
+- atomic 和 nonatomic
+
+```
+atomic:线程安全的, 用于保证属性setter、getter的原子性操作
+本质是在setter和getter内部加了线程同步的锁(spinlock_t, 自旋锁, 占用CPU资源)
+它并不能保证使用属性的过程是线程安全的
+```
+
+- 读写安全方案
+
+```
+同一时间，只能有1个线程进行写的操作
+同一时间，允许有多个线程进行读的操作
+同一时间，不允许既有写的操作，又有读的操作
+
+“多读单写”，经常用于文件等数据的读写操作
+
+iOS中的实现方案有:
+pthread_rwlock：读写锁
+
+dispatch_barrier_async：异步栅栏调用
+这个函数传入的并发队列必须是自己通过dispatch_queue_cretate创建的
+如果传入的是一个串行或是一个全局的并发队列，那这个函数便等同于dispatch_async函数的效果
+
 ```
 
 ## 内存管理
