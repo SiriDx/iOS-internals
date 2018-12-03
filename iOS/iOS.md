@@ -1716,3 +1716,17 @@ void UncaughtExceptionHandler(NSException * exception) {
     return YES;
 }
 ```
+
+- H5和原生的交互
+
+```
+H5中JS调用原生:
+- WebView:拦截链接
+- WKWebView: WKWebViewConfiguration, 
+
+```
+
+- WEEX和原生的交互
+
+```
+```
