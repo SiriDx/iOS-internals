@@ -1722,11 +1722,23 @@ void UncaughtExceptionHandler(NSException * exception) {
 ```
 H5中JS调用原生:
 - WebView:拦截链接
-- WKWebView: WKWebViewConfiguration, 
-
+- WKWebView: WKWebViewConfiguration 
 ```
 
 - WEEX和原生的交互
 
 ```
+WXSDKEngine
+- registerHandler: 注册回调
+- registerModule: 注册模块
+- registerComponent: 注册组件
+
+fireGlobalEvent:params: 出发全局事件
+WXModuleCallback 回调
+
+WX_EXPORT_METHOD(@selector()): 导出方法实现
+
+热更新:
+- 增量(bsdiff, 差量更新算法)
+- 全量
 ```
