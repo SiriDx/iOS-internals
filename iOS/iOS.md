@@ -10,6 +10,7 @@
 5. [内存管理](#内存管理)
 6. [性能优化](#性能优化)
 7. [设计模式与架构](#设计模式与架构)
+8. [其他](#其他)
 
 ## OC语法
 #### 面向对象
@@ -1691,4 +1692,27 @@ MVC、MVP、MVVM、VIPER、CDD
 你自己用过哪些设计模式？
 
 一般开始做一个项目，你的架构是如何思考的？
+```
+
+## 其他
+
+```
+流程，运营数据，维护，线上奔溃的收集和处理
+```
+
+- bug收集原理
+
+```objc
+void UncaughtExceptionHandler(NSException * exception) {
+    // 将异常数据保存到本地, 记录 版本号, 机型, 用户账号... 等信息
+    NSLog(@"exception:---%@", exception.name);
+    NSLog(@"exception:---%@", exception.reason);
+    NSLog(@"exception:---%@", exception.userInfo);
+    // 第二次打开时将异常数据上传到服务端
+}
+
+- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    NSSetUncaughtExceptionHandler(&UncaughtExceptionHandler);
+    return YES;
+}
 ```
