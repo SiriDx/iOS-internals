@@ -866,7 +866,6 @@ imageWithContentsOfFile: 根据图片路径加载图片
 
 ## 性能优化
 
-- 你在项目中是怎么优化内存的？
 - 优化你是从哪几方面着手？
 
 ```
@@ -956,6 +955,7 @@ Strip Linked Product、Make Strings Read-Only、Symbols Hidden by Default设置�
 编写LLVM插件检测出重复代码、未被调用的代码
 ```
 
+- 你在项目中是怎么优化内存的？
 - 列表卡顿的原因可能有哪些？你平时是怎么优化的？
 - 遇到tableView卡顿嘛？会造成卡顿的原因大致有哪些？
 
